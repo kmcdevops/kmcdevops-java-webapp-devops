@@ -1,0 +1,33 @@
+---
+- name: Deploy WAR to Tomcat
+  hosts: app
+  become: true
+  vars:
+    tomcat_dir: /opt/tomcat
+    remote_war_path: "{{ tomcat_dir }}/webapps/ROOT.war"
+    local_war_path: /tmp/app.war   # Jenkins pipeline should copy artifact to /tmp/app.war on control node before running this
+
+  tasks:
+    - name: Stop Tomcat before deploy
+      systemd:
+        name: tomcat
+        state: stopped
+        enabled: yes
+
+    - name: Remove old ROOT directory
+      file:
+        path: "{{ tomcat_dir }}/webapps/ROOT"
+        state: absent
+
+    - name: Copy WAR from control node to remote Tomcat webapps
+      copy:
+        src: "{{ local_war_path }}"
+        dest: "{{ remote_war_path }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Start Tomcat after deploy
+      systemd:
+        name: tomcat
+        state: started

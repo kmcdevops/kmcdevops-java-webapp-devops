@@ -1,0 +1,85 @@
+---
+- name: Install Java 17 and Apache Tomcat
+  hosts: app
+  become: yes
+
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: yes
+
+    - name: Install Java 17
+      apt:
+        name: openjdk-17-jdk
+        state: present
+
+    - name: Create Tomcat group
+      group:
+        name: tomcat
+
+    - name: Create Tomcat user
+      user:
+        name: tomcat
+        shell: /bin/false
+        group: tomcat
+        home: /opt/tomcat
+
+    - name: Download Tomcat
+      get_url:
+        url: https://downloads.apache.org/tomcat/tomcat-10/v10.1.31/bin/apache-tomcat-10.1.31.tar.gz
+        dest: /tmp/apache-tomcat.tar.gz
+
+    - name: Create Tomcat directory
+      file:
+        path: /opt/tomcat
+        state: directory
+        owner: tomcat
+        group: tomcat
+
+    - name: Extract Tomcat archive
+      unarchive:
+        src: /tmp/apache-tomcat.tar.gz
+        dest: /opt/tomcat
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+
+    - name: Change permissions for Tomcat directory
+      file:
+        path: /opt/tomcat
+        state: directory
+        recurse: yes
+        owner: tomcat
+        group: tomcat
+
+    - name: Create systemd service for Tomcat
+      copy:
+        dest: /etc/systemd/system/tomcat.service
+        content: |
+          [Unit]
+          Description=Apache Tomcat Web Application Container
+          After=network.target
+
+          [Service]
+          Type=forking
+          User=tomcat
+          Group=tomcat
+          Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"
+          Environment="CATALINA_PID=/opt/tomcat/temp/tomcat.pid"
+          Environment="CATALINA_HOME=/opt/tomcat"
+          Environment="CATALINA_BASE=/opt/tomcat"
+          ExecStart=/opt/tomcat/bin/startup.sh
+          ExecStop=/opt/tomcat/bin/shutdown.sh
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd daemon
+      command: systemctl daemon-reload
+
+    - name: Start and enable Tomcat
+      systemd:
+        name: tomcat
+        state: started
+        enabled: yes
